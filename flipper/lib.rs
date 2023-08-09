@@ -1,72 +1,97 @@
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
+#[cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
 
 #[ink::contract]
 mod flipper {
 
-    /// Defines the storage of your contract.
-    /// Add new fields to the below struct in order
-    /// to add new static storage fields to your contract.
+    use ink::prelude::vec::Vec;
+    use ink::storage::Mapping;
+    use scale::{Decode, Encode};
+
+//El objetivo de esta etapa #2 es modificar el smart contract que tienen en su repositorio para empezar a darle forma a nuestra a esta organización:
+// Storage: 
+// Incluir a los contribuyentes con su reputación asociada (usar vectores).
+// Incluir una cuenta administradora, que podrá agregar/eliminar contribuyentes.
+
+// Mensajes:
+// Agregar/Eliminar contribuyente
+// Votar (sólamente un contribuyente puede votar a otro)
+// Consultar reputación de contribuyente
+
+    #[ink(event)]
+    pub struct NewContributor {
+        #[ink(topic)]
+        contributor: Contributor
+    }
+
+    #[ink(event)]
+    pub struct Vote {
+        #[ink(topic)]
+        contributor: Contributor
+    }
+
     #[ink(storage)]
     pub struct Flipper {
-        /// Stores a single `bool` value on the storage.
-        value: bool,
+        admin: AccountId,
+        contributors_mapping: Mapping<AccountId, Contributor>,
+
+    }
+
+    
+    #[derive(Encode, Decode, Debug, Clone)]
+    #[cfg_attr(
+        feature = "std",
+        derive(scale_info::TypeInfo, ink::storage::traits::StorageLayout)
+    )]
+    pub struct Contributor {
+        contributor_id: AccountId,
+        reputation: u32
     }
 
     impl Flipper {
-        /// Constructor that initializes the `bool` value to the given `init_value`.
         #[ink(constructor)]
-        pub fn new(init_value: bool) -> Self {
-            Self { value: init_value }
+        pub fn new(admin: AccountId) -> Self {
+           
+            Self { 
+                admin,
+                contributors_mapping:Mapping::default() }
         }
 
-        /// Constructor that initializes the `bool` value to `false`.
-        ///
-        /// Constructors can delegate to other constructors.
-        #[ink(constructor)]
-        pub fn default() -> Self {
-            Self::new(Default::default())
-        }
-
-        /// A message that can be called on instantiated contracts.
-        /// This one flips the value of the stored `bool` from `true`
-        /// to `false` and vice versa.
         #[ink(message)]
-        pub fn flip(&mut self) {
-            self.value = !self.value;
+        pub fn add_contributor(&mut self, contributor:Contributor) {
+            assert!(self.env().caller() == self.admin);
+            self.contributors_mapping.insert(contributor.contributor_id, &contributor);
+            self.env().emit_event(NewContributor { contributor });
         }
 
-        /// Simply returns the current value of our `bool`.
+        pub fn add_contributors(&mut self, contributors: Vec<Contributor>) {
+            assert!(self.env().caller() == self.admin);
+            for item in contributors {
+                let contributor = Contributor {contributor_id: item.contributor_id, reputation: item.reputation };
+                self.contributors_mapping.insert(contributor.contributor_id, &contributor);
+                self.env().emit_event(NewContributor { contributor });
+            }
+
+        }
+
         #[ink(message)]
-        pub fn get(&self) -> bool {
-            self.value
+        pub fn vote(&mut self, id: AccountId) {
+            assert!(self.contributors_mapping.contains(id));
+
+            let mut contributor:Contributor = self.contributors_mapping.get(id).expect("Oh no, Contributor not found");
+            contributor.reputation += 1;
+        
+            self.contributors_mapping.insert(id, &contributor);
+            self.env().emit_event(Vote { contributor });
+        }
+
+        #[ink(message)]
+        pub fn get_addresss(&self) -> AccountId {
+            self.env().account_id()
         }
     }
 
-    /// Unit tests in Rust are normally defined within such a `#[cfg(test)]`
-    /// module and test functions are marked with a `#[test]` attribute.
-    /// The below code is technically just normal Rust code.
-    #[cfg(test)]
-    mod tests {
-        /// Imports all the definitions from the outer scope so we can use them here.
-        use super::*;
-
-        /// We test if the default constructor does its job.
-        #[ink::test]
-        fn default_works() {
-            let flipper = Flipper::default();
-            assert_eq!(flipper.get(), false);
-        }
-
-        /// We test a simple use case of our contract.
-        #[ink::test]
-        fn it_works() {
-            let mut flipper = Flipper::new(false);
-            assert_eq!(flipper.get(), false);
-            flipper.flip();
-            assert_eq!(flipper.get(), true);
-        }
-    }
-
+   
 
     /// This is how you'd write end-to-end (E2E) or integration tests for ink! contracts.
     ///
