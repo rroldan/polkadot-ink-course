@@ -5,7 +5,6 @@
 mod flipper {
 
     use ink::prelude::vec::Vec;
-    use ink::storage::Mapping;
     use scale::{Decode, Encode};
 
 //El objetivo de esta etapa #2 es modificar el smart contract que tienen en su repositorio para empezar a darle forma a nuestra a esta organización:
@@ -30,10 +29,17 @@ mod flipper {
         contributor: Contributor
     }
 
+    #[ink(event)]
+    pub struct Reputation {
+        #[ink(topic)]
+        reputation: u32
+    }
+
+
     #[ink(storage)]
     pub struct Flipper {
         admin: AccountId,
-        contributors_mapping: Mapping<AccountId, Contributor>,
+        contributors: Vec<Contributor>,
 
     }
 
@@ -51,24 +57,25 @@ mod flipper {
     impl Flipper {
         #[ink(constructor)]
         pub fn new(admin: AccountId) -> Self {
-           
+            let contributors_vector:Vec<Contributor> = Vec::new();
             Self { 
                 admin,
-                contributors_mapping:Mapping::default() }
+                contributors:contributors_vector}
         }
 
         #[ink(message)]
         pub fn add_contributor(&mut self, contributor:Contributor) {
             assert!(self.env().caller() == self.admin);
-            self.contributors_mapping.insert(contributor.contributor_id, &contributor);
+            self.contributors.push(contributor.clone());
             self.env().emit_event(NewContributor { contributor });
         }
 
+        #[ink(message)]
         pub fn add_contributors(&mut self, contributors: Vec<Contributor>) {
             assert!(self.env().caller() == self.admin);
             for item in contributors {
                 let contributor = Contributor {contributor_id: item.contributor_id, reputation: item.reputation };
-                self.contributors_mapping.insert(contributor.contributor_id, &contributor);
+                self.contributors.push(contributor.clone());
                 self.env().emit_event(NewContributor { contributor });
             }
 
@@ -76,92 +83,65 @@ mod flipper {
 
         #[ink(message)]
         pub fn vote(&mut self, id: AccountId) {
-            assert!(self.contributors_mapping.contains(id));
 
-            let mut contributor:Contributor = self.contributors_mapping.get(id).expect("Oh no, Contributor not found");
-            contributor.reputation += 1;
-        
-            self.contributors_mapping.insert(id, &contributor);
+           assert!(self.is_contributor(id));
+           let contributor = self.vote_contributor(id);
+         
             self.env().emit_event(Vote { contributor });
+        }
+
+        #[ink(message)]
+        pub fn reputation(&mut self, id: AccountId) {
+            assert!(self.is_contributor(id));
+           let contributor:Contributor = self.get_contributor(id);
+           let reputation = contributor.reputation;
+            self.env().emit_event(Reputation { reputation });
         }
 
         #[ink(message)]
         pub fn get_addresss(&self) -> AccountId {
             self.env().account_id()
         }
-    }
 
-   
-
-    /// This is how you'd write end-to-end (E2E) or integration tests for ink! contracts.
-    ///
-    /// When running these you need to make sure that you:
-    /// - Compile the tests with the `e2e-tests` feature flag enabled (`--features e2e-tests`)
-    /// - Are running a Substrate node which contains `pallet-contracts` in the background
-    #[cfg(all(test, feature = "e2e-tests"))]
-    mod e2e_tests {
-        /// Imports all the definitions from the outer scope so we can use them here.
-        use super::*;
-
-        /// A helper function used for calling contract messages.
-        use ink_e2e::build_message;
-
-        /// The End-to-End test `Result` type.
-        type E2EResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-        /// We test that we can upload and instantiate the contract using its default constructor.
-        #[ink_e2e::test]
-        async fn default_works(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
-            // Given
-            let constructor = FlipperRef::default();
-
-            // When
-            let contract_account_id = client
-                .instantiate("flipper", &ink_e2e::alice(), constructor, 0, None)
-                .await
-                .expect("instantiate failed")
-                .account_id;
-
-            // Then
-            let get = build_message::<FlipperRef>(contract_account_id.clone())
-                .call(|flipper| flipper.get());
-            let get_result = client.call_dry_run(&ink_e2e::alice(), &get, 0, None).await;
-            assert!(matches!(get_result.return_value(), false));
-
-            Ok(())
+      
+        fn is_contributor(&mut self, id: AccountId)-> bool {
+            let mut result:bool = false;
+            for item in &self.contributors {
+                if item.contributor_id == id {
+                    result = true;
+                    break;
+                }
+            }
+            result
+        } 
+       
+        fn vote_contributor (&mut self, id: AccountId) -> Contributor {
+            let mut contributor:Contributor = Contributor {contributor_id: id, reputation: 0};
+            for item in &mut self.contributors {
+                if item.contributor_id == id {
+                    item.reputation += 1;
+                    contributor = item.clone();
+                    break
+                }
+            }
+            assert!(id == contributor.contributor_id);
+            assert!(contributor.reputation > 0);
+            contributor
         }
 
-        /// We test that we can read and write a value from the on-chain contract contract.
-        #[ink_e2e::test]
-        async fn it_works(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
-            // Given
-            let constructor = FlipperRef::new(false);
-            let contract_account_id = client
-                .instantiate("flipper", &ink_e2e::bob(), constructor, 0, None)
-                .await
-                .expect("instantiate failed")
-                .account_id;
-
-            let get = build_message::<FlipperRef>(contract_account_id.clone())
-                .call(|flipper| flipper.get());
-            let get_result = client.call_dry_run(&ink_e2e::bob(), &get, 0, None).await;
-            assert!(matches!(get_result.return_value(), false));
-
-            // When
-            let flip = build_message::<FlipperRef>(contract_account_id.clone())
-                .call(|flipper| flipper.flip());
-            let _flip_result = client
-                .call(&ink_e2e::bob(), flip, 0, None)
-                .await
-                .expect("flip failed");
-
-            // Then
-            let get = build_message::<FlipperRef>(contract_account_id.clone())
-                .call(|flipper| flipper.get());
-            let get_result = client.call_dry_run(&ink_e2e::bob(), &get, 0, None).await;
-            assert!(matches!(get_result.return_value(), true));
-
-            Ok(())
+        fn get_contributor (&mut self, id: AccountId) -> Contributor {
+            let mut contributor:Contributor = Contributor {contributor_id: id, reputation: 0};
+            for item in &self.contributors {
+                if item.contributor_id == id {
+                    contributor = item.clone();
+                    break
+                }
+            }
+            assert!(id == contributor.contributor_id);
+            assert!(contributor.reputation > 0);
+            contributor
         }
+
     }
+
 }
