@@ -1,48 +1,72 @@
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
 
+/* Objetivo de etapa #3: 
+    Modificar el storage para utilizar Mappings en lugar de Vectores
+    Modificar lógica para que el poder de voto se corresponda con la reputación del contribuyente (mayor reputación -> mayor poder de voto)
+    Emitir un evento por cada voto
+    Agregar los siguientes controles:
+    El único que puede agregar o eliminar contribuyentes es el Admin
+    Los únicos que pueden votar son los contribuyentes registrados.
+    La reputación es privada. Cada contribuyente puede consultar únicamente la propia. 
+*/
+
 #[ink::contract]
 mod flipper {
 
-    use ink::prelude::vec::Vec;
+    use ink::storage::Mapping;
     use scale::{Decode, Encode};
-
-//El objetivo de esta etapa #2 es modificar el smart contract que tienen en su repositorio para empezar a darle forma a nuestra a esta organización:
-// Storage: 
-// Incluir a los contribuyentes con su reputación asociada (usar vectores).
-// Incluir una cuenta administradora, que podrá agregar/eliminar contribuyentes.
-
-// Mensajes:
-// Agregar/Eliminar contribuyente
-// Votar (sólamente un contribuyente puede votar a otro)
-// Consultar reputación de contribuyente
 
     #[ink(event)]
     pub struct NewContributor {
         #[ink(topic)]
-        contributor: Contributor
+        contributor_id: AccountId
+    }
+
+    #[ink(event)]
+    pub struct RemoveContributor {
+        #[ink(topic)]
+        contributor_id: AccountId
     }
 
     #[ink(event)]
     pub struct Vote {
         #[ink(topic)]
-        contributor: Contributor
+        contributor_id: AccountId
     }
 
     #[ink(event)]
-    pub struct Reputation {
+    pub struct VotesContributor {
         #[ink(topic)]
-        reputation: u32
+        contributor_id: AccountId,
+        #[ink(topic)]
+        votes: u32
+
     }
 
+    #[ink(event)]
+    pub struct ReputationContributor {
+        #[ink(topic)]
+        contributor_id: AccountId
+    }
 
     #[ink(storage)]
     pub struct Flipper {
         admin: AccountId,
-        contributors: Vec<Contributor>,
-
+        votes: Mapping<AccountId, u32>,
+        contributors: Mapping<AccountId, Contributor>
     }
 
+    #[derive(Encode, Decode, Debug, Clone)]
+    #[cfg_attr(
+        feature = "std",
+        derive(scale_info::TypeInfo, ink::storage::traits::StorageLayout)
+    )]
+    pub enum Reputation {
+    Easy ,
+    Medium,  
+    Hard   
+    }
     
     #[derive(Encode, Decode, Debug, Clone)]
     #[cfg_attr(
@@ -51,97 +75,70 @@ mod flipper {
     )]
     pub struct Contributor {
         contributor_id: AccountId,
-        reputation: u32
+        reputation: Reputation
     }
 
     impl Flipper {
         #[ink(constructor)]
         pub fn new(admin: AccountId) -> Self {
-            let contributors_vector:Vec<Contributor> = Vec::new();
             Self { 
                 admin,
-                contributors:contributors_vector}
+                votes: Mapping::default(),
+                contributors: Mapping::default()}
         }
 
         #[ink(message)]
-        pub fn add_contributor(&mut self, contributor:Contributor) {
+        pub fn add_contributor(&mut self, id:AccountId, r:Reputation) {
             assert!(self.env().caller() == self.admin);
-            self.contributors.push(contributor.clone());
-            self.env().emit_event(NewContributor { contributor });
+            let contributor: Contributor = Contributor{contributor_id:id, reputation:r};
+            self.contributors.insert(id, &contributor);
+            self.env().emit_event(NewContributor { contributor_id:id });
         }
 
-        #[ink(message)]
-        pub fn add_contributors(&mut self, contributors: Vec<Contributor>) {
+        pub fn remove_contributor(&mut self, id:AccountId){
             assert!(self.env().caller() == self.admin);
-            for item in contributors {
-                let contributor = Contributor {contributor_id: item.contributor_id, reputation: item.reputation };
-                self.contributors.push(contributor.clone());
-                self.env().emit_event(NewContributor { contributor });
-            }
-
+            assert!(self.contributors.contains(id));
+            self.contributors.remove(id);
+            self.env().emit_event(RemoveContributor { contributor_id:id });
         }
 
         #[ink(message)]
         pub fn vote(&mut self, id: AccountId) {
+        assert!(self.contributors.contains(id));
+        let  votes = self.votes.get(id).unwrap_or(0);
+        let contributor: Contributor = self.contributors.get(id).unwrap();
 
-           assert!(self.is_contributor(id));
-           let contributor = self.vote_contributor(id);
-         
-            self.env().emit_event(Vote { contributor });
+        self.votes.insert(id, &(self.rule_reptation_vote(votes, contributor.reputation)));
+        self.env().emit_event(Vote { contributor_id:id });
         }
 
         #[ink(message)]
-        pub fn reputation(&mut self, id: AccountId) {
-            assert!(self.is_contributor(id));
-           let contributor:Contributor = self.get_contributor(id);
-           let reputation = contributor.reputation;
-            self.env().emit_event(Reputation { reputation });
+        pub fn get_reputation(&self) -> Option<Reputation>  {
+            let id:AccountId = self.env().caller();
+            assert!(self.contributors.contains(id));
+           
+            let contributor: Contributor = self.contributors.get(id).unwrap();
+            self.env().emit_event(ReputationContributor{ contributor_id:id });
+            Some(contributor.reputation)
+        }
+
+        #[ink(message)]
+        pub fn get_votes(&self, id: AccountId) ->  Option<u32>{
+            assert!(self.contributors.contains(id));
+            let  v = self.votes.get(id).unwrap_or(0);
+            self.env().emit_event(VotesContributor{ contributor_id:id, votes:v });
+            Some(v)
+        }
+
+
+        fn rule_reptation_vote(&self, votes:u32, reputation:Reputation) -> u32 {
+            votes + reputation as u32
         }
 
         #[ink(message)]
         pub fn get_addresss(&self) -> AccountId {
             self.env().account_id()
         }
-
-      
-        fn is_contributor(&mut self, id: AccountId)-> bool {
-            let mut result:bool = false;
-            for item in &self.contributors {
-                if item.contributor_id == id {
-                    result = true;
-                    break;
-                }
-            }
-            result
-        } 
-       
-        fn vote_contributor (&mut self, id: AccountId) -> Contributor {
-            let mut contributor:Contributor = Contributor {contributor_id: id, reputation: 0};
-            for item in &mut self.contributors {
-                if item.contributor_id == id {
-                    item.reputation += 1;
-                    contributor = item.clone();
-                    break
-                }
-            }
-            assert!(id == contributor.contributor_id);
-            assert!(contributor.reputation > 0);
-            contributor
-        }
-
-        fn get_contributor (&mut self, id: AccountId) -> Contributor {
-            let mut contributor:Contributor = Contributor {contributor_id: id, reputation: 0};
-            for item in &self.contributors {
-                if item.contributor_id == id {
-                    contributor = item.clone();
-                    break
-                }
-            }
-            assert!(id == contributor.contributor_id);
-            assert!(contributor.reputation > 0);
-            contributor
-        }
-
     }
 
 }
