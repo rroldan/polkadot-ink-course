@@ -1,21 +1,23 @@
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
-#[cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
 
-/* Objetivo de etapa #3: 
-    Modificar el storage para utilizar Mappings en lugar de Vectores
-    Modificar lógica para que el poder de voto se corresponda con la reputación del contribuyente (mayor reputación -> mayor poder de voto)
-    Emitir un evento por cada voto
-    Agregar los siguientes controles:
-    El único que puede agregar o eliminar contribuyentes es el Admin
-    Los únicos que pueden votar son los contribuyentes registrados.
-    La reputación es privada. Cada contribuyente puede consultar únicamente la propia. 
+#[cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
+/*
+Objetivo de etapa #4: 
+Crear un contrato PSP34 (Utilizar Templates de OpenBrush) que sirva de certificado de votación
+Transferir al contribuyente un NFT que certifique su voto
+Definir un trait que represente el comportamiento de votación e implementarlo en el contrato
+Votar
+Obtener reputación/votos de un contribuyente
 */
+
+pub mod vote_contract;
 
 #[ink::contract]
 mod flipper {
 
     use ink::storage::Mapping;
     use scale::{Decode, Encode};
+    use crate::vote_contract::VoteContract;
 
     #[ink(event)]
     pub struct NewContributor {
@@ -141,4 +143,19 @@ mod flipper {
         }
     }
 
+    impl VoteContract for Flipper {
+        #[ink(message)]
+        fn get_votes(&self, id: AccountId) -> u32 {
+            self.get_votes(id).unwrap()
+        }
+    
+        #[ink(message)]
+        fn vote(&mut self, id: AccountId){
+            self.vote(id)
+        }
+    }
 }
+
+   
+
+
