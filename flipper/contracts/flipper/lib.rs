@@ -14,11 +14,12 @@ pub mod vote_contract;
 
 #[ink::contract]
 mod flipper {
-
+    use ink::prelude::vec::Vec;
     use ink::storage::Mapping;
     use scale::{Decode, Encode};
     use crate::vote_contract::VoteContract;
-
+    use mint::ContractRef;
+   
     #[ink(event)]
     pub struct NewContributor {
         #[ink(topic)]
@@ -56,7 +57,8 @@ mod flipper {
     pub struct Flipper {
         admin: AccountId,
         votes: Mapping<AccountId, u32>,
-        contributors: Mapping<AccountId, Contributor>
+        contributors: Mapping<AccountId, Contributor>,
+        contract: ContractRef,
     }
 
     #[derive(Encode, Decode, Debug, Clone)]
@@ -82,13 +84,19 @@ mod flipper {
 
     impl Flipper {
         #[ink(constructor)]
-        pub fn new(admin: AccountId) -> Self {
+        pub fn new(admin: AccountId, contract_code_hash: Hash) -> Self {
             Self { 
                 admin,
                 votes: Mapping::default(),
-                contributors: Mapping::default()}
+                contributors: Mapping::default(),
+                contract: ContractRef::new()
+                .code_hash(contract_code_hash)
+                .endowment(0)
+                .salt_bytes(Vec::new()) // Sequence of bytes
+                .instantiate()
+            }
         }
-
+        
         #[ink(message)]
         pub fn add_contributor(&mut self, id:AccountId, r:Reputation) {
             assert!(self.env().caller() == self.admin);
@@ -111,7 +119,9 @@ mod flipper {
         let contributor: Contributor = self.contributors.get(id).unwrap();
 
         self.votes.insert(id, &(self.rule_reptation_vote(votes, contributor.reputation)));
-        self.env().emit_event(Vote { contributor_id:id });
+        let result = self.contract.mint_token();
+        assert!(result.is_err());
+        self.env().emit_event(Vote { contributor_id:id});
         }
 
         #[ink(message)]
@@ -154,6 +164,7 @@ mod flipper {
             self.vote(id)
         }
     }
+ 
 }
 
    
