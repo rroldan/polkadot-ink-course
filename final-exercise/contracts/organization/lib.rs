@@ -53,10 +53,23 @@ mod organization {
         contributor_id: AccountId
     }
 
+    #[ink(event)]
+    pub struct BalanceContributor {
+        #[ink(topic)]
+        balance_contributor: Balance
+    }
+
+    #[ink(event)]
+    pub struct BalnceAdmin {
+        #[ink(topic)]
+        balance_admin: Balance
+    }
+
     #[ink(storage)]
     pub struct Organization {
         admin: AccountId,
         votes: Mapping<AccountId, u32>,
+        balances: Mapping<AccountId, Balance>,
         contributors: Mapping<AccountId, Contributor>,
         contract: ContractRef,
     }
@@ -83,12 +96,13 @@ mod organization {
     }
 
     impl Organization {
-        #[ink(constructor)]
+        #[ink(constructor, payable)]
         pub fn new(admin: AccountId, contract_code_hash: Hash) -> Self {
             Self { 
                 admin,
                 votes: Mapping::default(),
                 contributors: Mapping::default(),
+                balances: Mapping::default(),
                 contract: ContractRef::new()
                 .code_hash(contract_code_hash)
                 .endowment(0)
@@ -132,6 +146,25 @@ mod organization {
             let contributor: Contributor = self.contributors.get(id).unwrap();
             self.env().emit_event(ReputationContributor{ contributor_id:id });
             Some(contributor.reputation)
+        }
+
+        #[ink(message)]
+        pub fn get_balance(&self) ->  Option<Balance> {
+            let id:AccountId = self.env().caller();
+            assert!(self.contributors.contains(id));
+            let balance = self.balances.get(id).unwrap_or(0);
+            self.env().emit_event(BalanceContributor{ balance_contributor:balance });
+            Some(balance)
+
+        }
+
+        #[ink(message)]
+        pub fn get_balance_admin(&self) ->  Option<Balance> {
+            assert!(self.env().caller() == self.admin);
+            let id:AccountId = self.env().caller();
+            let balance = self.balances.get(id).unwrap_or(0);
+            self.env().emit_event(BalanceContributor{ balance_contributor:balance });
+            Some(balance)
         }
 
         #[ink(message)]
