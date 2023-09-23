@@ -62,7 +62,7 @@ mod organization {
         votes: Mapping<AccountId, u32>,
         balances: Mapping<AccountId, Balance>,
         contributors: Mapping<AccountId, Contributor>,
-        voutingRound: VoutingRound,
+        vouting_round: VoutingRound,
         contract: ContractRef
     }
 
@@ -116,7 +116,7 @@ mod organization {
                 votes: Mapping::default(),
                 contributors: Mapping::default(),
                 balances: Mapping::default(),
-                voutingRound: VoutingRound{votes:0, open:false, balance:0},
+                vouting_round: VoutingRound{votes:0, open:false, balance:0},
                 contract: ContractRef::new()
                 .code_hash(contract_code_hash)
                 .endowment(0)
@@ -210,10 +210,10 @@ mod organization {
             assert!(self.env().caller() == self.admin);
             let acount_balance_admin: Balance = self.get_balance_admin().unwrap_or(0);
             assert!(acount_balance_admin >= founds);
-            self.voutingRound.votes = votes;
-            self.voutingRound.balance = founds;
-            self.voutingRound.open = true;
-            self.voutingRound.open
+            self.vouting_round.votes = votes;
+            self.vouting_round.balance = founds;
+            self.vouting_round.open = true;
+            self.vouting_round.open
         }
     }
 
