@@ -1,13 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
 
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::new_without_default))]
+
 /*
-Objetivo de etapa #4: 
-Crear un contrato PSP34 (Utilizar Templates de OpenBrush) que sirva de certificado de votación
-Transferir al contribuyente un NFT que certifique su voto
-Definir un trait que represente el comportamiento de votación e implementarlo en el contrato
-Votar
-Obtener reputación/votos de un contribuyente
+Trabajo Práctico - Enunciado final
+https://github.com/NeoPower-Digital/ink-examples/blob/main/courses/Polkadot%20Hub%20-%20ink!%20en%20Espa%C3%B1ol/Trabajo%20Pr%C3%A1ctico.md
 */
 
 pub mod vote_contract;
@@ -54,15 +51,9 @@ mod organization {
     }
 
     #[ink(event)]
-    pub struct BalanceContributor {
+    pub struct Fund {
         #[ink(topic)]
-        balance_contributor: Balance
-    }
-
-    #[ink(event)]
-    pub struct BalnceAdmin {
-        #[ink(topic)]
-        balance_admin: Balance
+        balance: Balance
     }
 
     #[ink(storage)]
@@ -71,7 +62,8 @@ mod organization {
         votes: Mapping<AccountId, u32>,
         balances: Mapping<AccountId, Balance>,
         contributors: Mapping<AccountId, Contributor>,
-        contract: ContractRef,
+        voutingRound: VoutingRound,
+        contract: ContractRef
     }
 
     #[derive(Encode, Decode, Debug, Clone)]
@@ -84,6 +76,16 @@ mod organization {
     Medium,  
     Hard   
     }
+
+    #[derive(PartialEq, Eq, Debug, scale::Encode, scale::Decode)]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    pub enum ContractError {
+        YouAreNotFound,
+        AccountWithoutBalance,
+        InsufficientFunds,
+        ExpectedWithdrawalAmountExceedsAccountBalance,
+        WithdrawTransferFailed,
+    }
     
     #[derive(Encode, Decode, Debug, Clone)]
     #[cfg_attr(
@@ -94,6 +96,17 @@ mod organization {
         contributor_id: AccountId,
         reputation: Reputation
     }
+    
+    #[derive(Encode, Decode, Debug, Clone)]
+    #[cfg_attr(
+        feature = "std",
+        derive(scale_info::TypeInfo, ink::storage::traits::StorageLayout)
+    )]
+    pub struct VoutingRound {
+        votes: u32,
+        open: bool,
+        balance: Balance
+    }
 
     impl Organization {
         #[ink(constructor, payable)]
@@ -103,6 +116,7 @@ mod organization {
                 votes: Mapping::default(),
                 contributors: Mapping::default(),
                 balances: Mapping::default(),
+                voutingRound: VoutingRound{votes:0, open:false, balance:0},
                 contract: ContractRef::new()
                 .code_hash(contract_code_hash)
                 .endowment(0)
@@ -149,22 +163,29 @@ mod organization {
         }
 
         #[ink(message)]
-        pub fn get_balance(&self) ->  Option<Balance> {
+        pub fn get_balance(&self) -> Result<Balance, ContractError> {
             let id:AccountId = self.env().caller();
             assert!(self.contributors.contains(id));
-            let balance = self.balances.get(id).unwrap_or(0);
-            self.env().emit_event(BalanceContributor{ balance_contributor:balance });
-            Some(balance)
-
+            match self.balances.get(id) {
+                Some(acount_balance) => {
+                    self.env().emit_event(Fund{ balance:acount_balance });
+                    Ok(acount_balance)},
+                None => Err(ContractError::YouAreNotFound),
         }
+    }
 
         #[ink(message)]
-        pub fn get_balance_admin(&self) ->  Option<Balance> {
+        pub fn get_balance_admin(&self) ->  Result<Balance, ContractError> {
             assert!(self.env().caller() == self.admin);
             let id:AccountId = self.env().caller();
-            let balance = self.balances.get(id).unwrap_or(0);
-            self.env().emit_event(BalanceContributor{ balance_contributor:balance });
-            Some(balance)
+            match self.balances.get(id) {
+                Some(acount_balance) => {
+                    self.env().emit_event(Fund{ balance:acount_balance });
+                    Ok(acount_balance)},
+                None => Err(ContractError::YouAreNotFound),
+
+
+            }
         }
 
         #[ink(message)]
@@ -183,6 +204,16 @@ mod organization {
         #[ink(message)]
         pub fn get_addresss(&self) -> AccountId {
             self.env().account_id()
+        }
+
+        pub fn open_vouting_round(&mut self, votes:u32, founds:Balance ) -> bool {
+            assert!(self.env().caller() == self.admin);
+            let acount_balance_admin: Balance = self.get_balance_admin().unwrap_or(0);
+            assert!(acount_balance_admin >= founds);
+            self.voutingRound.votes = votes;
+            self.voutingRound.balance = founds;
+            self.voutingRound.open = true;
+            self.voutingRound.open
         }
     }
 
