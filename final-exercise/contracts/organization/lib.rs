@@ -125,9 +125,12 @@ mod organization {
         #[ink(message)]
         pub fn vote(&mut self, id: AccountId, vote:i32) {
         assert!(self.contributors.contains(id));
+        assert!(self.vouting_round.open);
+        assert!(self.vouting_round.votes>0);
+        self.vouting_round.votes -= 1;
         let  votes = self.votes.get(id).unwrap_or(0);
         let reputation = self.contributors.get(id).unwrap();
-        let new_votes = votes as i32 + vote;
+        let new_votes = votes + vote;
         let new_reputation = self.rule_reptation_vote(reputation, votes, vote);
 
         self.votes.insert(id, &new_votes);
@@ -191,8 +194,7 @@ mod organization {
 
         fn rule_reptation_vote(&self, member_pts:u32, target_pts:i32, value:i32) -> u32 {
             if (target_pts  + value) < 1 { return 1 }
-            let reputation = (target_pts as u32 + value as u32) * self.get_squareroot(member_pts);
-            reputation
+            (target_pts as u32 + value as u32) * self.get_squareroot(member_pts)
         }
 
 
