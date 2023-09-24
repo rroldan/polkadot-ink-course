@@ -59,12 +59,15 @@ mod organization {
     }
 
 
+
+
     #[ink(storage)]
     pub struct Organization {
         admin: AccountId,
         votes: Mapping<AccountId, i32>,
-        balances: Mapping<AccountId, Balance>,
         contributors: Mapping<AccountId, u32>,
+        reputation: Vec<(AccountId, u32)>,
+        balances: Mapping<AccountId, Balance>,
         vouting_round: VoutingRound,
         contract: ContractRef
     }
@@ -89,20 +92,22 @@ mod organization {
         open: bool,
         balance: Balance
     }
-
     impl Organization {
         #[ink(constructor, payable)]
         pub fn new(admin: AccountId, contract_code_hash: Hash) -> Self {
+            let reputation_vec:Vec<(AccountId, u32)>=Vec::new();
+
             Self { 
                 admin,
                 votes: Mapping::default(),
-                contributors: Mapping::default(),
+                contributors:  Mapping::default(),
+                reputation: reputation_vec,
                 balances: Mapping::default(),
                 vouting_round: VoutingRound{votes:0, open:false, balance:0},
                 contract: ContractRef::new()
                 .code_hash(contract_code_hash)
                 .endowment(0)
-                .salt_bytes(Vec::new()) // Sequence of bytes
+                .salt_bytes(Vec::new()) 
                 .instantiate()
 
             }
@@ -111,7 +116,7 @@ mod organization {
         #[ink(message)]
         pub fn add_contributor(&mut self, id:AccountId) {
             assert!(self.env().caller() == self.admin);
-            self.contributors.insert(id, &1);
+            self.reputation.push((id,1));
             self.env().emit_event(NewContributor { contributor_id:id });
         }
 
@@ -119,6 +124,8 @@ mod organization {
             assert!(self.env().caller() == self.admin);
             assert!(self.contributors.contains(id));
             self.contributors.remove(id);
+            let index = self.reputation.iter().position(|x| x.0 == id).unwrap();
+            self.reputation.remove(index);
             self.env().emit_event(RemoveContributor { contributor_id:id });
         }
 
@@ -183,7 +190,7 @@ mod organization {
         }
 
         
-        #[ink(message)] 
+         
         pub fn get_squareroot(&self, num: u32) -> u32 {  
             let d1 = FixedU128::from_u32(num);  
             let d2 = FixedU128::sqrt(d1); 
@@ -191,7 +198,7 @@ mod organization {
             d3 as u32
         }
 
-
+       
         fn rule_reptation_vote(&self, member_pts:u32, target_pts:i32, value:i32) -> u32 {
             if (target_pts  + value) < 1 { return 1 }
             (target_pts as u32 + value as u32) * self.get_squareroot(member_pts)
@@ -203,15 +210,46 @@ mod organization {
             self.env().account_id()
         }
 
+        
+        pub fn sum_reputation_all(&self) -> u128 {
+            let mut sum:u32 = 0;
+            for (_ , reputation) in &self.reputation {
+                sum += reputation;      
+            }
+            sum as u128
+        }
+
+        pub fn clear_reputation(&mut self) {
+                self.votes = Mapping::default();
+                self.contributors =  Mapping::default();
+                self.reputation.clear();
+                self.balances = Mapping::default();
+        }
+
+
+        #[ink(message)]
         pub fn open_vouting_round(&mut self, votes:u32, founds:Balance ) -> bool {
             assert!(self.env().caller() == self.admin);
             let acount_balance_admin: Balance = self.get_balance_admin().unwrap_or(0);
             assert!(acount_balance_admin >= founds);
             self.vouting_round.votes = votes;
             assert!(votes > 0);
-            self.vouting_round.balance = founds;
+            self.vouting_round.balance = self.env().transferred_value();
             self.vouting_round.open = true;
             self.vouting_round.open
+        }
+
+        pub fn close_vouting_round(&mut self) {
+            assert!(self.vouting_round.open);
+            let weights:u128 = self.vouting_round.balance/self.sum_reputation_all();
+           // self.payment();
+           // self.mint();
+           self.clear_reputation();
+           self.vouting_round = VoutingRound{votes:0, open:false, balance:0};
+
+
+
+
         }
     }
 
