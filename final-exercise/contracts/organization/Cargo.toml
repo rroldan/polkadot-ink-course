@@ -12,6 +12,8 @@ scale-info = { version = "2.6", default-features = false, features = ["derive"],
 
 openbrush = { git = "https://github.com/Brushfam/openbrush-contracts", version = "~4.0.0-beta", default-features = false, features = ["psp34", "ownable"] }
 
+sp-arithmetic = { version = "15", default-features = false }
+
 mint = { path = "../mint", default-features = false, features = [
     "ink-as-dependency",
 ] }
@@ -29,6 +31,7 @@ std = [
     "scale/std",
     "scale-info/std",
     "openbrush/std",
+    "sp-arithmetic/std",
     "mint/std"
 ]
 ink-as-dependency = []
