@@ -141,7 +141,11 @@ mod organization {
         let new_reputation = self.rule_reptation_vote(reputation, votes, vote);
 
         self.votes.insert(id, &new_votes);
-        self.contributors.insert(id, &new_reputation);
+    
+
+        let result = self.contract.mint_token();
+        assert!(result.is_err());
+
         self.env().emit_event(Vote { contributor_id:id});
         }
 
@@ -181,6 +185,8 @@ mod organization {
             }
         }
 
+
+
         #[ink(message)]
         pub fn get_votes(&self, id: AccountId) ->  Option<i32>{
             assert!(self.contributors.contains(id));
@@ -219,6 +225,9 @@ mod organization {
             sum as u128
         }
 
+       
+
+
         pub fn clear_reputation(&mut self) {
                 self.votes = Mapping::default();
                 self.contributors =  Mapping::default();
@@ -240,10 +249,10 @@ mod organization {
         }
 
         pub fn close_vouting_round(&mut self) {
+            assert!(self.env().caller() == self.admin);
             assert!(self.vouting_round.open);
             let weights:u128 = self.vouting_round.balance/self.sum_reputation_all();
-           // self.payment();
-           // self.mint();
+            //self.transfer(&mut self);
            self.clear_reputation();
            self.vouting_round = VoutingRound{votes:0, open:false, balance:0};
 
