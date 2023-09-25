@@ -120,6 +120,7 @@ mod organization {
             self.env().emit_event(NewContributor { contributor_id:id });
         }
 
+         #[ink(message)]
         pub fn remove_contributor(&mut self, id:AccountId){
             assert!(self.env().caller() == self.admin);
             assert!(self.contributors.contains(id));
@@ -141,8 +142,8 @@ mod organization {
         let new_reputation = self.rule_reptation_vote(reputation, votes, vote);
 
         self.votes.insert(id, &new_votes);
-        self.update_reputation(id, new_reputation);
-
+        self.update_reputation(id, new_reputation); 
+        self.balances.insert(id, &self.env().balance());
         let result = self.contract.mint_token();
         assert!(result.is_err());
 
@@ -172,17 +173,9 @@ mod organization {
     }
 
         #[ink(message)]
-        pub fn get_balance_admin(&self) ->  Result<Balance, ContractError> {
+        pub fn get_balance_admin(&self) ->  Balance {
             assert!(self.env().caller() == self.admin);
-            let id:AccountId = self.env().caller();
-            match self.balances.get(id) {
-                Some(acount_balance) => {
-                    self.env().emit_event(Fund{ balance:acount_balance });
-                    Ok(acount_balance)},
-                None => Err(ContractError::YouAreNotFound),
-
-
-            }
+            self.env().balance()
         }
 
 
@@ -248,7 +241,7 @@ mod organization {
         #[ink(message)]
         pub fn open_vouting_round(&mut self, votes:u32, founds:Balance ) -> bool {
             assert!(self.env().caller() == self.admin);
-            let acount_balance_admin: Balance = self.get_balance_admin().unwrap_or(0);
+            let acount_balance_admin: Balance = self.get_balance_admin();
             assert!(acount_balance_admin >= founds);
             self.vouting_round.votes = votes;
             assert!(votes > 0);
@@ -265,10 +258,6 @@ mod organization {
             //self.transfer(&mut self);
            self.clear_reputation();
            self.vouting_round = VoutingRound{votes:0, open:false, balance:0};
-
-
-
-
         }
     }
 
