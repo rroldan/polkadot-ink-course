@@ -141,7 +141,7 @@ mod organization {
         let new_reputation = self.rule_reptation_vote(reputation, votes, vote);
 
         self.votes.insert(id, &new_votes);
-    
+        self.update_reputation(id, new_reputation);
 
         let result = self.contract.mint_token();
         assert!(result.is_err());
@@ -225,7 +225,17 @@ mod organization {
             sum as u128
         }
 
-       
+        #[ink(message)]
+        pub fn update_reputation(&mut self, id:AccountId, new_reputation:u32) {
+            
+            for mut item in &self.reputation {
+                let mut aux = item.clone();
+                if aux.0 == id { 
+                    aux.1 = new_reputation;
+                    item = &aux;
+                }
+            }
+        }
 
 
         pub fn clear_reputation(&mut self) {
