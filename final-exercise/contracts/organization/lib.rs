@@ -226,13 +226,12 @@ mod organization {
         }
 
         #[ink(message)]
-        pub fn update_reputation(&mut self, id:AccountId, new_reputation:u32) {
-            
-            for mut item in &self.reputation {
-                let mut aux = item.clone();
+        pub fn update_reputation(&mut self, id:AccountId, new_reputation:u32) {       
+            for item in &self.reputation {
+                let mut aux = *item;
                 if aux.0 == id { 
                     aux.1 = new_reputation;
-                    item = &aux;
+                    break;
                 }
             }
         }
@@ -258,6 +257,7 @@ mod organization {
             self.vouting_round.open
         }
 
+        #[ink(message)]
         pub fn close_vouting_round(&mut self) {
             assert!(self.env().caller() == self.admin);
             assert!(self.vouting_round.open);
