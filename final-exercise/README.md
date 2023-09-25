@@ -4,5 +4,5 @@
    -  Crear ronda de voto:  (No se controla por implementación el tiempo de la ronda un flag determina si está abierta o no) fn open_vouting_round
    -  Votación:  fn vote
    -  Regla de reputación: Usada la propuesta en el ejercicio: fn rule_reputation_vote
-   -  Cirere de ronda: close_vouting_round
+   -  Cirere  y limpieza de ronda: close_vouting_round
   
