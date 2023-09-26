@@ -18,6 +18,9 @@ mint = { path = "../mint", default-features = false, features = [
     "ink-as-dependency",
 ] }
 
+[profile.release]
+overflow-checks = false
+
 [dev-dependencies]
 ink_e2e = "4.3.0"
 
@@ -36,6 +39,3 @@ std = [
 ]
 ink-as-dependency = []
 e2e-tests = []
-
-[profile.release.package.compiler_builtins]
-overflow-checks = false

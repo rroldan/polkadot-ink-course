@@ -252,8 +252,8 @@ mod organization {
 
             let reputation = self.reputation.clone();
             for elem in reputation.iter() {
-                let value = weights * elem.1 as u128;
-                let result = self.transfer_from_to(self.admin,elem.0, value);
+                let value = weights as u32 * elem.1;
+                let result = self.transfer_from_to(self.admin,elem.0, value as u128);
                 assert!(result.is_err());
             }
             
