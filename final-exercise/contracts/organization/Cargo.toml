@@ -36,3 +36,6 @@ std = [
 ]
 ink-as-dependency = []
 e2e-tests = []
+
+[profile.release.package.compiler_builtins]
+overflow-checks = false

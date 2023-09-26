@@ -58,7 +58,14 @@ mod organization {
         balance: Balance
     }
 
-
+    #[ink(event)]
+    pub struct Transfer {
+        #[ink(topic)]
+        from: Option<AccountId>,
+        #[ink(topic)]
+        to: AccountId,
+        value: Balance,
+    }
 
 
     #[ink(storage)]
@@ -143,7 +150,6 @@ mod organization {
 
         self.votes.insert(id, &new_votes);
         self.update_reputation(id, new_reputation); 
-        self.balances.insert(id, &self.env().balance());
         let result = self.contract.mint_token();
         assert!(result.is_err());
 
@@ -160,17 +166,6 @@ mod organization {
             reputation
         }
 
-        #[ink(message)]
-        pub fn get_balance(&self) -> Result<Balance, ContractError> {
-            let id:AccountId = self.env().caller();
-            assert!(self.contributors.contains(id));
-            match self.balances.get(id) {
-                Some(acount_balance) => {
-                    self.env().emit_event(Fund{ balance:acount_balance });
-                    Ok(acount_balance)},
-                None => Err(ContractError::YouAreNotFound),
-        }
-    }
 
         #[ink(message)]
         pub fn get_balance_admin(&self) ->  Balance {
@@ -255,10 +250,47 @@ mod organization {
             assert!(self.env().caller() == self.admin);
             assert!(self.vouting_round.open);
             let weights:u128 = self.vouting_round.balance/self.sum_reputation_all();
-            //self.transfer(&mut self);
+
+            let reputation = self.reputation.clone();
+            for elem in reputation.iter() {
+                let value = weights * elem.1 as u128;
+                let result = self.transfer_from_to(self.admin,elem.0, value);
+                assert!(result.is_err());
+            }
            self.clear_reputation();
-           self.vouting_round = VoutingRound{votes:0, open:false, balance:0};
+           self.vouting_round = VoutingRound{votes:0, open:false, balance:0};  
         }
+
+        pub fn transfer_from_to(
+            &mut self,
+            from: AccountId,
+            to: AccountId,
+            value: Balance,
+        ) -> Result<(), ContractError> {
+            let from_balance = self.get_balance(from);
+            if from_balance < value {
+                return Err(ContractError::InsufficientFunds);
+            }
+
+            self.balances.insert(from, &(from_balance - value));
+
+            let to_balance = self.get_balance(to);
+            self.balances.insert(to, &(to_balance + value));
+
+            self.env().emit_event(Transfer {
+                from: Some(from),
+                to,
+                value,
+            });
+
+            Ok(())
+        }
+       
+        fn get_balance(&self, owner: AccountId) -> Balance {
+            self.balances.get(owner).unwrap_or(0)
+        }
+
+        
     }
 
     impl VoteContract for Organization {
@@ -271,6 +303,7 @@ mod organization {
         fn vote(&mut self, id: AccountId, vote: i32){
             self.vote(id, vote)
         }
+
     }
  
 }
