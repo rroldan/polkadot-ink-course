@@ -29,6 +29,13 @@ pub mod mint {
         }
 
         #[ink(message)]
+        pub fn mint_token_from(&mut self, id:AccountId) -> Result<(), PSP34Error> {
+            psp34::Internal::_mint_to(self,id, Id::U8(self.next_id))?;
+            self.next_id += 1;
+            Ok(())
+        }
+
+        #[ink(message)]
         pub fn mint(&mut self, id: Id) -> Result<(), PSP34Error> {
             psp34::Internal::_mint_to(self, Self::env().caller(), id)
         }

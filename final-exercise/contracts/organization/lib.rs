@@ -150,8 +150,7 @@ mod organization {
 
         self.votes.insert(id, &new_votes);
         self.update_reputation(id, new_reputation); 
-        let result = self.contract.mint_token();
-        assert!(result.is_err());
+        
 
         self.env().emit_event(Vote { contributor_id:id});
         }
@@ -257,6 +256,10 @@ mod organization {
                 let result = self.transfer_from_to(self.admin,elem.0, value);
                 assert!(result.is_err());
             }
+            
+            let result = self.contract.mint_token_from(self.reputation_max());
+            assert!(result.is_err());
+          
            self.clear_reputation();
            self.vouting_round = VoutingRound{votes:0, open:false, balance:0};  
         }
@@ -284,6 +287,18 @@ mod organization {
             });
 
             Ok(())
+        }
+
+        fn reputation_max (&self) ->  AccountId {
+            let mut id = self.admin;
+            let mut max:u32 = 0;
+            for elem in self.reputation.iter() {
+                if elem.1 > max {
+                    max = elem.1;
+                    id = elem.0;
+                } 
+            }
+            id
         }
        
         fn get_balance(&self, owner: AccountId) -> Balance {
